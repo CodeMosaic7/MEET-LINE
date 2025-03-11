@@ -1,69 +1,70 @@
-
+import { UserManager } from "./user.manager.js";
 export class RoomManager {
-  constructor() {
+  constructor(userManager) {
+    
     this.rooms = {};
     this.roomCounter = 0;
-    
+    this.userManager = userManager;    
   }
 
-  createRoom(user1, user2) {
-    // 1. assign them room
-    // 2. Notify them they are there
-    // 3. remove them from current queue.
+  createRoom(user1Id, user2Id) {
+    const user1 = this.userManager.users.find(user => user.socket.id === user1Id);
+    const user2 = this.userManager.users.find(user => user.socket.id === user2Id);
+    console.log("users",this.userManager.users)
+    // PROBLEM: user1 and user 2 are not joining the room
+    console.log("user1",user1.socket.id)
+    if (!user1 || !user2) {
+        return console.error("Failed to create room: Invalid users");
+    }
 
-    // generating room id
     const roomId = `room-${++this.roomCounter}`;
-    console.log(typeof(roomId))
-    console.log(roomId)
-    this.rooms[roomId] = {
-      // ??
-      users: [user1, user2],
-    };
+    this.rooms[roomId] = { users: [user1.socket.id, user2.socket.id] };
 
-    user1?.socket.emit("successfulConnection", { roomId, User: user2.name });
-    console.log("in create roomId",roomId)
-    // user2?.socket.emit("successfulConnection", { roomId, User: user1.name });
-    return roomId
-  }
+    user1.socket.join(roomId);
+    user2.socket.join(roomId);
+
+    user1.socket.emit("successfulConnection", { roomId, user: user2.socket.id });
+    user2.socket.emit("successfulConnection", { roomId, user: user1.socket.id });
+
+    return roomId;
+}
+
 
   removeRoom(roomId) {
     if (this.rooms[roomId]) {
-      // extracting users from the room
       const { users } = this.rooms[roomId];
-
       users.forEach((user) => {
-        user.socket.emit("roomCLosed", { roomId });
+        user.socket.emit("roomClosed", { roomId });
       });
       delete this.rooms[roomId];
       console.log(`Room ${roomId} removed`);
+    } else {
+      console.error(`Room ${roomId} does not exist`);
     }
   }
-// sdp session decription protocol
-  
+
   onOffer(roomId, sdp) {
-    console.log("sending offer")
+    console.log("sending offer");
     const room = this.rooms[roomId];
     if (room) {
       const user2 = room.users[1];
-      user2?.socket.emit("offer", {roomId,offer: sdp });
+      user2?.socket.emit("offer", { roomId, sdp });
+    } else {
+      console.error("Room not found", roomId);
     }
-    console.log("sent offer")
-    
+    console.log("sent offer");
   }
 
   onAnswer(roomId, sdp) {
-    console.log("sending anwser")
+    console.log("sending answer");
     const room = this.rooms[roomId];
-    console.log(room)
     if (room) {
       const user1 = room.users[0];
       const user2 = room.users[1];
-      room.user1?.socket.emit("answer", { roomId, answer:sdp });
-      room.user2?.socket.emit("answer", { roomId, answer: sdp });
+      user1?.socket.emit("answer", { roomId, sdp });
+    } else {
+      console.error("Room not found", roomId);
     }
-    else{
-      console.error("Room not found",roomId)
-    }
-    console.log("sent anwser")
+    console.log("sent answer");
   }
 }
