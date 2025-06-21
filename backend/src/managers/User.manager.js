@@ -1,108 +1,136 @@
-import { Socket } from "socket.io";
-import { RoomManager } from "./room.manager.js";
-
 export class UserManager {
-  constructor(roomManager) {
+  constructor() {
     this.users = [];
-    this.queue = [];
-    this.roomManager = new RoomManager(this);
+    this.waitingQueue = [];
   }
 
-  addUser(name, socket) {
-    this.users.push({
-      name,
+  // Add a new user
+  addUser(socket, userData = {}) {
+    const user = {
       socket,
-    });
-    console.log(this.queue.length);
+      id: socket.id,
+      name: userData.name || `User-${socket.id.substring(0, 6)}`,
+      joinedAt: Date.now(),
+      ...userData,
+    };
 
-    console.log(`Added user: ${name}, socket ID: ${socket.id}`);
-    this.queue.push(socket.id);
-    // console.log("added user to queue array",this.queue)
-    this.clearQueue();
+    this.users.push(user);
+    console.log(
+      `User ${user.name} (${socket.id}) added. Total users: ${this.users.length}`
+    );
 
-    socket.send("lobby");
-    
+    return user;
   }
 
+  // Remove a user
   removeUser(socketId) {
-    // which user to remove
-    this.users = this.users.filter((x) => x.socket.id !== socketId);
-    this.queue = this.queue.filter((x) => x !== socketId);
-    console.log("User removed. Current users:", this.users);
-  }
+    const userIndex = this.users.findIndex(
+      (user) => user.socket.id === socketId
+    );
 
-  clearQueue() {
-    console.log("Checking queue...");
-    console.log("Current queue:", this.queue);
-    // Ensure there are at least two users in the queue
-    if (this.queue.length < 2) {
-      console.log("Not enough users in the queue.");
-      return;
-    }
-    // Retrieve the first two socket IDs from the queue
-    const user1Id = this.queue.shift();
-    const user2Id = this.queue.shift();
+    if (userIndex !== -1) {
+      const user = this.users[userIndex];
+      this.users.splice(userIndex, 1);
 
-    // Find the users corresponding to the socket IDs 
-    const user1 = this.users.find((user) => user.socket.id === user1Id);
-    const user2 = this.users.find((user) => user.socket.id === user2Id);
-    console.log(`Selected socket IDs: ${user1}, ${user2}`);
+      // Also remove from waiting queue if present
+      this.removeFromWaitingQueue(socketId);
 
-    // Find users corresponding to the socket IDs
-    
-    if (!user1) {
-      console.log(`User with socket ID ${user1.socket.id} not found.`);
-    }
-    if (!user2) {
-      console.log(`User with socket ID ${user2.socket.id} not found.`);
-    }
-    // Ensure both users are valid
-    if (!user1 || !user2) {
-      console.log("One or both users are missing. Returning IDs to queue.");
-      if (user1) this.queue.unshift(user1.socket.id); // Add back to the front of the queue
-      if (user2) this.queue.unshift(user2.socket.id);
-      return;
+      console.log(
+        `User ${user.name} (${socketId}) removed. Total users: ${this.users.length}`
+      );
+      return user;
     }
 
-    // Create a room for the users
-    const roomId = this.roomManager.createRoom(user1Id, user2Id);
-    console.log(`Room created for users: ${user1.Socket}, ${user2.Socket}`);
-
-    user1.socket.emit("send-offer", { roomId: roomId });
-    user2.socket.emit("offer", { roomId: roomId});
-
-    user1.socket.emit("connection-established", {
-      roomId: roomId,
-      user: user2.name,
-    });
-    user2.socket.emit("connection-established", {
-      roomId: roomId,
-      user: user1.name,
-    });
-    console.log("connection established and room made");
+    console.log(`User ${socketId} not found for removal`);
+    return null;
   }
 
-  onConnection(roomId, sdp) {
-    const user2 = this.rooms.get(roomId)?.user1;
-    user2?.socket.emit("offer", {
-      sdp,
-    });
+  // Get user by socket ID
+  getUser(socketId) {
+    return this.users.find((user) => user.socket.id === socketId);
   }
 
-  initHandlers(socket) {
-    socket.on("offer", ({ sdp, roomId }) => {
-      this.roomManager.onOffer(roomId, sdp);
-    });
-    socket.on("answer", ({ sdp, roomId }) => {
-      console.log("in anwer", roomId);
-      this.roomManager.onAnswer(roomId, sdp);
-    });
-    socket.on("disconnect", () => {
-      this.removeUser(socket.id); // Remove user on disconnect
-    });
+  // Add user to waiting queue
+  addToWaitingQueue(socketId) {
+    if (!this.waitingQueue.includes(socketId)) {
+      this.waitingQueue.push(socketId);
+      console.log(
+        `User ${socketId} added to waiting queue. Queue length: ${this.waitingQueue.length}`
+      );
+    }
   }
 
-  // deleteRoom(roomId){
-  //   const
-  // }
+  // Get next user from waiting queue without removing them
+  getNextWaitingUser() {
+    if (this.waitingQueue.length > 0) {
+      return this.waitingQueue[0];
+    }
+    return null;
+  }
+
+  // Remove user from waiting queue
+  removeFromWaitingQueue(socketId) {
+    const index = this.waitingQueue.indexOf(socketId);
+    if (index !== -1) {
+      this.waitingQueue.splice(index, 1);
+      console.log(
+        `User ${socketId} removed from waiting queue. Queue length: ${this.waitingQueue.length}`
+      );
+      return true;
+    }
+    return false;
+  }
+
+  // Check if user is in waiting queue
+  isInWaitingQueue(socketId) {
+    return this.waitingQueue.includes(socketId);
+  }
+
+  // Get all connected users
+  getConnectedUsers() {
+    return this.users.filter((user) => user.socket && user.socket.connected);
+  }
+
+  // Get user statistics
+  getUserStats() {
+    return {
+      totalUsers: this.users.length,
+      connectedUsers: this.getConnectedUsers().length,
+      waitingQueueLength: this.waitingQueue.length,
+      waitingQueue: this.waitingQueue,
+      users: this.users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        connected: user.socket ? user.socket.connected : false,
+        joinedAt: user.joinedAt,
+        inWaitingQueue: this.isInWaitingQueue(user.id),
+      })),
+    };
+  }
+
+  // Clean up disconnected users
+  cleanupDisconnectedUsers() {
+    const before = this.users.length;
+
+    // Get disconnected user IDs first
+    const disconnectedUserIds = this.users
+      .filter((user) => !user.socket || !user.socket.connected)
+      .map((user) => user.id);
+
+    // Remove disconnected users from the users array
+    this.users = this.users.filter(
+      (user) => user.socket && user.socket.connected
+    );
+
+    // Remove disconnected users from waiting queue
+    disconnectedUserIds.forEach((userId) => {
+      this.removeFromWaitingQueue(userId);
+    });
+
+    const after = this.users.length;
+
+    if (before !== after) {
+      console.log(`Cleaned up ${before - after} disconnected users`);
+    }
+  }
 }

@@ -18,15 +18,15 @@ export const Landing = () => {
       });
 
       const audioTrack = stream.getAudioTracks()[0];
-      console.log(audioTrack)
+      console.log(audioTrack);
       const videoTrack = stream.getVideoTracks()[0];
-      console.log(videoTrack)
+      console.log(videoTrack);
       setLocalAudioTrack(audioTrack);
       setLocalVideoTrack(videoTrack);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        console.log("videoref set") // Directly assign the stream
+        console.log("videoref set"); // Directly assign the stream
       }
     } catch (error) {
       console.error("Error accessing media devices:", error);
@@ -68,5 +68,11 @@ export const Landing = () => {
     );
   }
 
-  return <ChatRoom name={name} localAudioTrack={localAudioTrack} localVideoTrack={localVideoTrack} />;
+  return (
+    <ChatRoom
+      name={name}
+      localAudioTrack={localAudioTrack}
+      localVideoTrack={localVideoTrack}
+    />
+  );
 };
