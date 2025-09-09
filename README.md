@@ -12,9 +12,8 @@
 ## Tech Stack
 
 - **Frontend**: HTML, CSS, JavaScript
-- **Backend**: [Specify backend technology, e.g., Node.js, Express]
-- **Real-Time Communication**: [Specify WebRTC or signaling server technology]
-- **Deployment**: [Specify hosting platform, e.g., Netlify, Heroku]
+- **Backend**: Javascript
+- **Real-Time Communication**: Web Sockets
 
 ## Installation
 
